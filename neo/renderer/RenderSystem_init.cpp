@@ -48,8 +48,6 @@ glconfig_t	glConfig;
 
 void GfxInfo_f( const idCmdArgs& args );
 
-const char *r_rendererArgs[] = { "best", "arb", "arb2", "Cg", "exp", "nv10", "nv20", "r200", NULL };
-
 idCVar r_glDebugOutput( "r_glDebugOutput", "0", CVAR_RENDERER | CVAR_INTEGER | CVAR_ARCHIVE, "print OpenGL debug output: 0 = Off, 1 = Asynchronous, 2 = Synchronous" );
 idCVar r_useLightPortalFlow( "r_useLightPortalFlow", "1", CVAR_RENDERER | CVAR_BOOL, "use a more precise area reference determination" );
 idCVar r_multiSamples( "r_multiSamples", "0", CVAR_RENDERER | CVAR_ARCHIVE | CVAR_INTEGER, "number of antialiasing samples" );
@@ -224,6 +222,7 @@ idCVar r_softParticles( "r_softParticles", "1", CVAR_RENDERER | CVAR_ARCHIVE | C
 idCVar r_defaultParticleSoftness( "r_defaultParticleSoftness", "0.35", CVAR_RENDERER | CVAR_ARCHIVE | CVAR_FLOAT, "");
 
 idCVar r_useFramebuffer( "r_useFramebuffer", "0", CVAR_RENDERER | CVAR_ARCHIVE | CVAR_BOOL, "render everything to an offscreen buffer before blitting the final image to the screen" );
+idCVar r_framebufferScale( "r_framebufferScale", "1", CVAR_RENDERER | CVAR_ARCHIVE | CVAR_FLOAT, "" );
 
 /*
 ==================
@@ -258,54 +257,17 @@ static bool R_DoubleCheckExtension( const char* name ) {
 	}
 
 	return ret;
-
-#if 0
-	bool glewCheck = glewIsSupported(name) == GL_TRUE;
-
-	static const char* status[] = {
-		"[ FAILED ]",
-		"[   OK   ]"
-	};
-
-	common->Printf("%s %s\n", status[glewCheck ? 1 : 0], name);
-
-	return glewCheck;
-#endif
 }
 
 static void R_CheckPortableExtensions( void ) {
 	glConfig.glVersion = atof( glConfig.version_string );
 
-	// GL_ARB_multitexture
-	glConfig.multitextureAvailable = R_DoubleCheckExtension( "GL_ARB_multitexture" );
-	if (glConfig.multitextureAvailable) {
-		glGetIntegerv( GL_MAX_TEXTURE_UNITS_ARB, (GLint *)&glConfig.maxTextureUnits );
-		if (glConfig.maxTextureUnits == 0) {
-			glConfig.maxTextureUnits = 16;
-			//glGetIntegerv( GL_MAX_TEXTURE_IMAGE_UNITS_ARB , (GLint *)&glConfig.maxTextureUnits );
-		}
-		if (glConfig.maxTextureUnits > MAX_MULTITEXTURE_UNITS) {
-			glConfig.maxTextureUnits = MAX_MULTITEXTURE_UNITS;
-		}
-		if (glConfig.maxTextureUnits < 2) {
-			glConfig.multitextureAvailable = false;	// shouldn't ever happen
-		}
-		glGetIntegerv( GL_MAX_TEXTURE_COORDS_ARB, (GLint *)&glConfig.maxTextureCoords );
-		glGetIntegerv( GL_MAX_TEXTURE_IMAGE_UNITS_ARB, (GLint *)&glConfig.maxTextureImageUnits );
+	glGetIntegerv( GL_MAX_TEXTURE_UNITS, (GLint *)&glConfig.maxTextureUnits );
+	if (glConfig.maxTextureUnits > MAX_MULTITEXTURE_UNITS) {
+		glConfig.maxTextureUnits = MAX_MULTITEXTURE_UNITS;
 	}
-
-	// GL_ARB_texture_cube_map
-	glConfig.cubeMapAvailable = R_DoubleCheckExtension( "GL_ARB_texture_cube_map" );
-
-	// GL_ARB_texture_env_dot3
-	glConfig.envDot3Available = R_DoubleCheckExtension( "GL_ARB_texture_env_dot3" );
-
-	// GL_ARB_texture_env_add
-	glConfig.textureEnvAddAvailable = R_DoubleCheckExtension( "GL_ARB_texture_env_add" );
-
-	// GL_ARB_texture_non_power_of_two
-	glConfig.textureNonPowerOfTwoAvailable = R_DoubleCheckExtension( "GL_ARB_texture_non_power_of_two" );
-
+	glGetIntegerv( GL_MAX_TEXTURE_COORDS, (GLint *)&glConfig.maxTextureCoords );
+	glGetIntegerv( GL_MAX_TEXTURE_IMAGE_UNITS, (GLint *)&glConfig.maxTextureImageUnits );
 
 	// GL_ARB_texture_compression + GL_S3_s3tc
 	// DRI drivers may have GL_ARB_texture_compression but no GL_EXT_texture_compression_s3tc
@@ -531,9 +493,11 @@ void R_InitOpenGL( void ) {
 		parms.height = glConfig.vidHeight;
 		parms.fullScreen = r_fullscreen.GetBool();
 		parms.displayHz = r_displayRefresh.GetInteger();
-		parms.multiSamples = r_multiSamples.GetInteger();
-		parms.glCoreProfile = r_glCoreProfile.GetBool();
-		parms.stereo = false;
+		parms.multiSamples = 1;// r_multiSamples.GetInteger();
+		parms.coreProfile = r_glCoreProfile.GetBool();
+		parms.majorVersion = 4;
+		parms.minorVersion = 5;
+		parms.debug = false;
 
 		if (GLimp_Init( parms )) {
 			// it worked
@@ -562,10 +526,9 @@ void R_InitOpenGL( void ) {
 	glConfig.renderer_string = (const char *)glGetString( GL_RENDERER );
 	glConfig.version_string = (const char *)glGetString( GL_VERSION );
 
-	glConfig.vendorisAMD = (strstr(glConfig.vendor_string, "AMD") != nullptr) || (strstr(glConfig.renderer_string, "AMD") != nullptr);
-
 	// OpenGL driver constants
 	glGetIntegerv( GL_MAX_TEXTURE_SIZE, &glConfig.maxTextureSize );
+	glGetIntegerv( GL_MAX_SAMPLES, &glConfig.maxSamples );
 
 	// stubbed or broken drivers may have reported 0...
 	if (glConfig.maxTextureSize <= 0) {
@@ -637,6 +600,7 @@ void R_InitOpenGL( void ) {
 	}
 #endif
 	glEnable( GL_TEXTURE_CUBE_MAP_SEAMLESS );
+	glEnable( GL_MULTISAMPLE );
 }
 
 /*
@@ -1011,7 +975,7 @@ static float R_RenderingFPS( const renderView_t *renderView ) {
 		// render
 		renderSystem->BeginFrame( glConfig.vidWidth, glConfig.vidHeight );
 		tr.primaryWorld->RenderScene( renderView );
-		renderSystem->EndFrame( NULL, NULL );
+		renderSystem->EndFrame();
 		glFinish();
 		count++;
 		end = Sys_Milliseconds();
@@ -1083,9 +1047,15 @@ tiling it into window-sized chunks and rendering each chunk separately
 If ref isn't specified, the full session UpdateScreen will be done.
 ====================
 */
-void R_ReadTiledPixels( int width, int height, byte *buffer, renderView_t *ref = NULL ) {
+static void R_ReadTiledPixels( int width, int height, byte *buffer, renderView_t *ref = NULL ) {
 	// include extra space for OpenGL padding to word boundaries
-	byte	*temp = (byte *)R_StaticAlloc( (glConfig.vidWidth+3) * glConfig.vidHeight * 3 );
+	byte *temp = nullptr;
+	if (r_useFramebuffer.GetBool()) {
+		temp = (byte *)R_StaticAlloc( (width + 3) * height * 3 );
+	}
+	else {
+		temp = (byte *)R_StaticAlloc( (glConfig.vidWidth + 3) * glConfig.vidHeight * 3 );
+	}
 
 	int	oldWidth = glConfig.vidWidth;
 	int oldHeight = glConfig.vidHeight;
@@ -1104,7 +1074,7 @@ void R_ReadTiledPixels( int width, int height, byte *buffer, renderView_t *ref =
 			if ( ref ) {
 				tr.BeginFrame( oldWidth, oldHeight );
 				tr.primaryWorld->RenderScene( ref );
-				tr.EndFrame( NULL, NULL );
+				tr.EndFrame();
 			} else {
 				session->UpdateScreen();
 			}
@@ -1118,14 +1088,19 @@ void R_ReadTiledPixels( int width, int height, byte *buffer, renderView_t *ref =
 				h = height - yo;
 			}
 
-			glReadBuffer( GL_FRONT );
-			glReadPixels( 0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, temp );
+			if (r_useFramebuffer.GetBool()) {
+				assert( glConfig.arbDirectStateAccessAvailable );
+				glGetTextureImageEXT( globalImages->renderColorImage->texnum, GL_TEXTURE_2D, 0, GL_RGB, GL_UNSIGNED_BYTE, temp );
+			}
+			else {
+				glReadBuffer( GL_FRONT );
+				glReadPixels( 0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, temp );
+			}
 
 			int	row = ( w * 3 + 3 ) & ~3;		// OpenGL pads to dword boundaries
 
 			for ( int y = 0 ; y < h ; y++ ) {
-				memcpy( buffer + ( ( yo + y )* width + xo ) * 3,
-					temp + y * row, w * 3 );
+				memcpy( buffer + ( ( yo + y )* width + xo ) * 3, temp + y * row, w * 3 );
 			}
 		}
 	}
@@ -1143,6 +1118,33 @@ void R_ReadTiledPixels( int width, int height, byte *buffer, renderView_t *ref =
 	glConfig.vidHeight = oldHeight;
 }
 
+static void R_ReadPixels( int width, int height, byte *buffer, renderView_t *ref = NULL ) {
+	// disable scissor, so we don't need to adjust all those rects
+	r_useScissor.SetBool( false );
+
+	if (ref) {
+		tr.BeginFrame( width, height );
+		tr.primaryWorld->RenderScene( ref );
+		tr.EndFrame();
+	}
+	else {
+		session->UpdateScreen();
+	}
+
+	if (r_useFramebuffer.GetBool()) {
+		assert( glConfig.arbDirectStateAccessAvailable );
+		glGetTextureImageEXT( globalImages->renderColorImage->texnum, GL_TEXTURE_2D, 0, GL_RGB, GL_UNSIGNED_BYTE, buffer );
+	}
+
+	r_useScissor.SetBool( true );
+
+	tr.viewportOffset[0] = 0;
+	tr.viewportOffset[1] = 0;
+	tr.tiledViewport[0] = 0;
+	tr.tiledViewport[1] = 0;
+}
+
+
 
 /*
 ==================
@@ -1156,17 +1158,15 @@ If ref == NULL, session->updateScreen will be used
 ==================
 */
 void idRenderSystemLocal::TakeScreenshot( int width, int height, const char *fileName, int blends, renderView_t *ref ) {
-	byte		*buffer;
-	int			i, j, c, temp;
-
 	takingScreenshot = true;
 
 	int	pix = width * height;
 
-	buffer = (byte *)R_StaticAlloc(pix*3 + 18);
+	byte* buffer = (byte *)R_StaticAlloc(pix*3 + 18);
 	memset (buffer, 0, 18);
 
 	if ( blends <= 1 ) {
+		//R_ReadPixels( width, height, buffer + 18, ref );
 		R_ReadTiledPixels( width, height, buffer + 18, ref );
 	} else {
 		unsigned short *shortBuffer = (unsigned short *)R_StaticAlloc(pix*2*3);
@@ -1175,16 +1175,16 @@ void idRenderSystemLocal::TakeScreenshot( int width, int height, const char *fil
 		// enable anti-aliasing jitter
 		r_jitter.SetBool( true );
 
-		for ( i = 0 ; i < blends ; i++ ) {
+		for ( int i = 0 ; i < blends ; i++ ) {
 			R_ReadTiledPixels( width, height, buffer + 18, ref );
 
-			for ( j = 0 ; j < pix*3 ; j++ ) {
+			for ( int j = 0 ; j < pix*3 ; j++ ) {
 				shortBuffer[j] += buffer[18+j];
 			}
 		}
 
 		// divide back to bytes
-		for ( i = 0 ; i < pix*3 ; i++ ) {
+		for ( int i = 0 ; i < pix*3 ; i++ ) {
 			buffer[18+i] = shortBuffer[i] / blends;
 		}
 
@@ -1201,9 +1201,9 @@ void idRenderSystemLocal::TakeScreenshot( int width, int height, const char *fil
 	buffer[16] = 24;	// pixel size
 
 	// swap rgb to bgr
-	c = 18 + width * height * 3;
-	for (i=18 ; i<c ; i+=3) {
-		temp = buffer[i];
+	const int c = 18 + width * height * 3;
+	for (int i=18 ; i<c ; i+=3) {
+		int temp = buffer[i];
 		buffer[i] = buffer[i+2];
 		buffer[i+2] = temp;
 	}
@@ -1283,29 +1283,22 @@ void R_ScreenShot_f( const idCmdArgs &args ) {
 	static int lastNumber = 0;
 	idStr checkname;
 
-	int width = glConfig.vidWidth;
-	int height = glConfig.vidHeight;
+	int width = r_useFramebuffer.GetBool() ? fhFramebuffer::renderFramebuffer->GetWidth() : glConfig.vidWidth;
+	int height = r_useFramebuffer.GetBool() ? fhFramebuffer::renderFramebuffer->GetHeight() : glConfig.vidHeight;
 	int	x = 0;
 	int y = 0;
-	int	blends = 0;
+	int	blends = 1;
 
 	switch ( args.Argc() ) {
 	case 1:
-		width = glConfig.vidWidth;
-		height = glConfig.vidHeight;
-		blends = 1;
 		R_ScreenshotFilename( lastNumber, "screenshots/shot", checkname );
 		break;
 	case 2:
-		width = glConfig.vidWidth;
-		height = glConfig.vidHeight;
-		blends = 1;
 		checkname = args.Argv( 1 );
 		break;
 	case 3:
 		width = atoi( args.Argv( 1 ) );
 		height = atoi( args.Argv( 2 ) );
-		blends = 1;
 		R_ScreenshotFilename( lastNumber, "screenshots/shot", checkname );
 		break;
 	case 4:
@@ -1721,12 +1714,6 @@ void GfxInfo_f( const idCmdArgs &args ) {
 	common->Printf( "GL_MAX_TEXTURE_IMAGE_UNITS_ARB: %d\n", glConfig.maxTextureImageUnits );
 	common->Printf( "\nPIXELFORMAT: color(%d-bits) Z(%d-bit) stencil(%d-bits)\n", glConfig.colorBits, glConfig.depthBits, glConfig.stencilBits );
 	common->Printf( "MODE: %d, %d x %d %s hz:", r_mode.GetInteger(), glConfig.vidWidth, glConfig.vidHeight, fsstrings[r_fullscreen.GetBool()] );
-
-	if ( glConfig.displayFrequency ) {
-		common->Printf( "%d\n", glConfig.displayFrequency );
-	} else {
-		common->Printf( "N/A\n" );
-	}
 	common->Printf( "CPU: %s\n", Sys_GetProcessorString() );
 
 	//=============================
@@ -1827,7 +1814,6 @@ void R_VidRestart_f( const idCmdArgs &args ) {
 		parms.fullScreen = ( forceWindow ) ? false : r_fullscreen.GetBool();
 		parms.displayHz = r_displayRefresh.GetInteger();
 		parms.multiSamples = r_multiSamples.GetInteger();
-		parms.stereo = false;
 		GLimp_SetScreenParms( parms );
 	}
 

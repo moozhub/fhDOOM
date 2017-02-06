@@ -33,6 +33,8 @@ If you have questions concerning this license or the applicable additional terms
 #include "tr_local.h"
 #include "ImageProgram.h"
 
+static const int FALLOFF_TEXTURE_SIZE = 64;
+
 const char *imageFilter[] = {
 	"GL_LINEAR_MIPMAP_NEAREST",
 	"GL_LINEAR_MIPMAP_LINEAR",

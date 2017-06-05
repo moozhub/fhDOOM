@@ -341,30 +341,20 @@ static void R_BorderClampImage( idImage *image ) {
 	//glSamplerParameterfv(image->samplernum, GL_TEXTURE_BORDER_COLOR, color );
 }
 
+static void R_RGB8Image( idImage *image ) {
+	image->AllocateStorage( pixelFormat_t::RGB, DEFAULT_SIZE, DEFAULT_SIZE, 1, 1 );
+}
+
 static void R_RGBA8Image( idImage *image ) {
-	byte	data[DEFAULT_SIZE][DEFAULT_SIZE][4];
-
-	memset( data, 0, sizeof( data ) );
-	data[0][0][0] = 16;
-	data[0][0][1] = 32;
-	data[0][0][2] = 48;
-	data[0][0][3] = 96;
-
-	image->GenerateImage( (byte *)data, DEFAULT_SIZE, DEFAULT_SIZE,
-		TF_DEFAULT, false, TR_REPEAT, TD_HIGH_QUALITY );
+	image->AllocateStorage( pixelFormat_t::RGBA, DEFAULT_SIZE, DEFAULT_SIZE, 1, 1 );
 }
 
 static void R_Depth( idImage *image ) {
-	byte	data[DEFAULT_SIZE][DEFAULT_SIZE][4];
+	image->AllocateStorage( pixelFormat_t::DEPTH_24, DEFAULT_SIZE, DEFAULT_SIZE, 1, 1 );
+}
 
-	memset( data, 0, sizeof( data ) );
-	data[0][0][0] = 16;
-	data[0][0][1] = 32;
-	data[0][0][2] = 48;
-	data[0][0][3] = 255;
-
-	image->GenerateImage( (byte *)data, DEFAULT_SIZE, DEFAULT_SIZE,
-		TF_DEFAULT, false, TR_CLAMP, TD_HIGH_QUALITY );
+static void R_DepthStencil( idImage *image ) {
+	image->AllocateStorage( pixelFormat_t::DEPTH_24_STENCIL_8, DEFAULT_SIZE, DEFAULT_SIZE, 1, 1 );
 }
 
 static void R_AlphaNotchImage( idImage *image ) {
@@ -1890,7 +1880,7 @@ void idImageManager::Init() {
 	scratchImage = ImageFromFunction("_scratch", R_RGBA8Image );
 	scratchImage2 = ImageFromFunction("_scratch2", R_RGBA8Image );
 	accumImage = ImageFromFunction("_accum", R_RGBA8Image );
-	currentRenderImage = ImageFromFunction("_currentRender", R_RGBA8Image );
+	currentRenderImage = ImageFromFunction("_currentRender", R_RGB8Image );
 	currentDepthImage = ImageFromFunction("_currentDepth", R_Depth );
 
 	cmdSystem->AddCommand( "reloadImages", R_ReloadImages_f, CMD_FL_RENDERER, "reloads images" );
@@ -1902,7 +1892,7 @@ void idImageManager::Init() {
 	shadowmapImage = ImageFromFunction( "_shadowmapImage", R_Depth );
 
 	renderColorImage = ImageFromFunction( "_renderColorImage", R_RGBA8Image );
-	renderDepthImage = ImageFromFunction( "_renderDepthImage", R_Depth );
+	renderDepthImage = ImageFromFunction( "_renderDepthImage", R_DepthStencil );
 
 	// should forceLoadImages be here?
 }

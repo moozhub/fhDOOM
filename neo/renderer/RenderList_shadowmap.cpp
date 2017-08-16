@@ -149,6 +149,8 @@ void ShadowRenderList::Submit( const float* shadowViewMatrix, const float* shado
 	const int sideBit = (1 << side);
 	const int num = Num();
 
+	glDepthRange(0, 1);
+
 	for (int i = 0; i < num; ++i) {
 		const auto& drawShadow = (*this)[i];
 
@@ -157,7 +159,7 @@ void ShadowRenderList::Submit( const float* shadowViewMatrix, const float* shado
 		}
 
 		if (!drawShadow.tris->ambientCache) {
-			//TODO(johl): Some surfaces need lighting later on (e.g. AF/Ragdolls), if we don't create 
+			//TODO(johl): Some surfaces need lighting later on (e.g. AF/Ragdolls), if we don't create
 			//            lighting info for them here (needsLighting=true), those surfaces will show up
 			//            completely black in the game (due to missing normals/tangents).
 			//            How do we know, if lighting is needed later on?

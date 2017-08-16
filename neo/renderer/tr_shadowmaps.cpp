@@ -219,7 +219,7 @@ void R_MakeShadowMapFrustums( idRenderLightLocal *light ) {
 			|| fabs( light->parms.lightCenter[1] ) > light->parms.lightRadius[1]
 			|| fabs( light->parms.lightCenter[2] ) > light->parms.lightRadius[2]) {
 			centerOutside = true;
-		}		
+		}
 
 		// make the corners to calculate backplane
 		idVec3 corners[8];
@@ -316,7 +316,7 @@ void R_MakeShadowMapFrustums( idRenderLightLocal *light ) {
 			else {
 				projectionMatrix = fhRenderMatrix::CreateProjectionMatrix( r_smFov.GetFloat(), 1, r_smNearClip.GetFloat(), r_smFarClip.GetFloat() );
 			}
-			
+
 			for (int side = 0; side < 6; side++) {
 				shadowMapFrustum_t *frust = &light->shadowMapFrustums[side];
 				frust->projectionMatrix = projectionMatrix;
@@ -393,7 +393,7 @@ void R_MakeShadowMapFrustums( idRenderLightLocal *light ) {
 
 		auto viewMatrix_tmp = fhRenderMatrix::CreateLookAtMatrix( flippedOrigin, flippedTarget, flippedUp );
 		frust->viewMatrix = viewMatrix_tmp * fhRenderMatrix::FlipMatrix();
-		
+
 		RB_CreateProjectedProjectionMatrix( light, frust->projectionMatrix.ToFloatPtr() );
 
 		frust->viewProjectionMatrix = frust->projectionMatrix * frust->viewMatrix;
@@ -407,7 +407,7 @@ void R_MakeShadowMapFrustums( idRenderLightLocal *light ) {
 bool RB_RenderShadowMaps( viewLight_t* vLight ) {
 
 	const idMaterial* lightShader = vLight->lightShader;
-	
+
 	if (lightShader->IsFogLight() || lightShader->IsBlendLight()) {
 		return true;
 	}
@@ -517,20 +517,6 @@ bool RB_RenderShadowMaps( viewLight_t* vLight ) {
 			float t = idMath::Abs( maximum.y - minimum.y ) * 0.5f;
 			float b = -t;
 
-			if (r_ignore.GetBool()) {
-				idVec2 vWorldUnitsPerTexel = idVec2( 2 * r, 2 * t ) / 1024.0f;
-
-				minimum /= vWorldUnitsPerTexel;
-				minimum.x = idMath::Floor( minimum.x ) - 10;
-				minimum.y = idMath::Floor( minimum.y ) - 10;
-				minimum *= vWorldUnitsPerTexel;
-
-				maximum /= vWorldUnitsPerTexel;
-				maximum.x = idMath::Ceil( maximum.x ) + 10;
-				maximum.y = idMath::Ceil( maximum.y ) + 10;
-				maximum *= vWorldUnitsPerTexel;
-			}
-
 			vLight->viewMatrices[c] = frustum.viewMatrix;
 			vLight->viewMatrices[c][12] = -(maximum.x + minimum.x) * 0.5f;
 			vLight->viewMatrices[c][13] = -(maximum.y + minimum.y) * 0.5f;
@@ -564,7 +550,7 @@ bool RB_RenderShadowMaps( viewLight_t* vLight ) {
 
 		idVec3 viewCorners[8];
 		backEnd.viewDef->viewFrustum.ToPoints( viewCorners );
-		
+
 		for (int i = 0; i < 6; ++i) {
 			if(r_smLightSideCulling.GetBool()) {
 				vLight->culled[i] = vLight->lightDef->shadowMapFrustums[i].Cull(viewCorners);

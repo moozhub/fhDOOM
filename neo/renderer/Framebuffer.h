@@ -39,11 +39,8 @@ public:
 	int  GetHeight() const;
 
 	void Purge();
-	void Bind();	
+	void Bind();
 	void Resize( int width, int height );
-	
-	void BlitToCurrentFramebuffer();
-	void BlitDepthToCurrentFramebuffer();
 
 	static fhFramebuffer* GetCurrentDrawBuffer() {
 		return currentDrawBuffer;
@@ -56,11 +53,16 @@ public:
 	static fhFramebuffer* currentRenderFramebuffer;
 
 	static void Init();
+	static void PurgeAll();
+	static void BlitColor( fhFramebuffer* source, fhFramebuffer* dest );
+	static void BlitColor(fhFramebuffer* source, fhFramebuffer* dest, int src_width, int src_height);
+	static void BlitDepth( fhFramebuffer* source, fhFramebuffer* dest );
 
 private:
 	static fhFramebuffer* currentDrawBuffer;
 
 	void SetDrawBuffer();
+	void Allocate();
 
 	int      width;
 	int      height;

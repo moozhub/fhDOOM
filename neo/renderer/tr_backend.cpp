@@ -2,9 +2,9 @@
 ===========================================================================
 
 Doom 3 GPL Source Code
-Copyright (C) 1999-2011 id Software LLC, a ZeniMax Media company. 
+Copyright (C) 1999-2011 id Software LLC, a ZeniMax Media company.
 
-This file is part of the Doom 3 GPL Source Code (?Doom 3 Source Code?).  
+This file is part of the Doom 3 GPL Source Code (?Doom 3 Source Code?).
 
 Doom 3 Source Code is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -36,6 +36,40 @@ If you have questions concerning this license or the applicable additional terms
 frameData_t		*frameData;
 backEndState_t	backEnd;
 
+static const unsigned vertexLayoutAttributes[] = {
+	//None:
+	0,
+	//Shadow:
+	(1 << fhRenderProgram::vertex_attrib_position_shadow),
+	//ShadowSilhouette:
+	(1 << fhRenderProgram::vertex_attrib_position),
+	//Simple
+	(1 << fhRenderProgram::vertex_attrib_position)
+	| (1 << fhRenderProgram::vertex_attrib_texcoord)
+	| (1 << fhRenderProgram::vertex_attrib_color),
+	//Draw
+	(1 << fhRenderProgram::vertex_attrib_position)
+	| (1 << fhRenderProgram::vertex_attrib_texcoord)
+	| (1 << fhRenderProgram::vertex_attrib_normal)
+	| (1 << fhRenderProgram::vertex_attrib_color)
+	| (1 << fhRenderProgram::vertex_attrib_binormal)
+	| (1 << fhRenderProgram::vertex_attrib_tangent),
+	//DrawPosOnly
+	(1 << fhRenderProgram::vertex_attrib_position),
+	//DrawPosTexOnly
+	(1 << fhRenderProgram::vertex_attrib_position)
+	| (1 << fhRenderProgram::vertex_attrib_texcoord),
+	//DrawPosColorOnly
+	(1 << fhRenderProgram::vertex_attrib_position)
+	| (1 << fhRenderProgram::vertex_attrib_color),
+	//DrawPosColorTexOnly
+	(1 << fhRenderProgram::vertex_attrib_position)
+	| (1 << fhRenderProgram::vertex_attrib_texcoord)
+	| (1 << fhRenderProgram::vertex_attrib_color)
+};
+static_assert(sizeof( vertexLayoutAttributes ) / sizeof( vertexLayoutAttributes[0] ) == (size_t)fhVertexLayout::COUNT, "");
+
+static fhVertexLayout currentVertexLayout = fhVertexLayout::None;
 
 /*
 ======================
@@ -46,6 +80,7 @@ may touch, including the editor.
 ======================
 */
 void RB_SetDefaultGLState(void) {
+	currentVertexLayout = fhVertexLayout::None;
 	RB_LogComment("--- R_SetDefaultGLState ---\n");
 
 	glClearDepth(1.0f);
@@ -173,7 +208,7 @@ This routine is responsible for setting the most commonly changed state
 */
 void GL_State( int stateBits ) {
 	int	diff;
-	
+
 	if ( !r_useStateCaching.GetBool() || backEnd.glState.forceGlState ) {
 		// make sure everything is set all the time, so we
 		// can see if our delta checking is screwing up
@@ -314,47 +349,11 @@ void GL_State( int stateBits ) {
 bool  GL_UseProgram( const fhRenderProgram* program ) {
   if(program) {
 	  return program->Bind();
-  } 
+  }
 
   fhRenderProgram::Unbind();
-  return false;  
+  return false;
 }
-
-
-static const unsigned vertexLayoutAttributes[] = {
-	//None:
-	0,
-	//Shadow:
-	(1 << fhRenderProgram::vertex_attrib_position_shadow),
-	//ShadowSilhouette:
-	(1 << fhRenderProgram::vertex_attrib_position),
-	//Simple
-	(1 << fhRenderProgram::vertex_attrib_position)
-	| (1 << fhRenderProgram::vertex_attrib_texcoord)
-	| (1 << fhRenderProgram::vertex_attrib_color),
-	//Draw
-	(1 << fhRenderProgram::vertex_attrib_position)
-	| (1 << fhRenderProgram::vertex_attrib_texcoord)
-	| (1 << fhRenderProgram::vertex_attrib_normal)
-	| (1 << fhRenderProgram::vertex_attrib_color)
-	| (1 << fhRenderProgram::vertex_attrib_binormal)
-	| (1 << fhRenderProgram::vertex_attrib_tangent),
-	//DrawPosOnly
-	(1 << fhRenderProgram::vertex_attrib_position),
-	//DrawPosTexOnly
-	(1 << fhRenderProgram::vertex_attrib_position)
-	| (1 << fhRenderProgram::vertex_attrib_texcoord),
-	//DrawPosColorOnly
-	(1 << fhRenderProgram::vertex_attrib_position)
-	| (1 << fhRenderProgram::vertex_attrib_color),
-	//DrawPosColorTexOnly
-	(1 << fhRenderProgram::vertex_attrib_position)
-	| (1 << fhRenderProgram::vertex_attrib_texcoord)
-	| (1 << fhRenderProgram::vertex_attrib_color)
-};
-static_assert(sizeof(vertexLayoutAttributes)/sizeof(vertexLayoutAttributes[0]) == (size_t)fhVertexLayout::COUNT, "");
-
-static fhVertexLayout currentVertexLayout = fhVertexLayout::None;
 
 void GL_SetVertexLayout( fhVertexLayout layout ) {
 	if(currentVertexLayout == layout || layout == fhVertexLayout::None) {
@@ -370,10 +369,10 @@ void GL_SetVertexLayout( fhVertexLayout layout ) {
 		const bool shouldBeEnabled = (target & bit) != 0;
 
 		if (shouldBeEnabled && !isEnabled) {
-			glEnableVertexAttribArray(i);			
+			glEnableVertexAttribArray(i);
 		}
 		else if (!shouldBeEnabled && isEnabled) {
-			glDisableVertexAttribArray(i);			
+			glDisableVertexAttribArray(i);
 		}
 	}
 
@@ -391,8 +390,6 @@ static const void* attributeOffset( T offset, int attributeOffset )
 {
 	return reinterpret_cast<const void*>((std::ptrdiff_t)offset + (std::ptrdiff_t)attributeOffset);
 }
-
-
 
 void GL_SetupVertexAttributes( fhVertexLayout layout, int offset ) {
 	GL_SetVertexLayout( layout );
@@ -446,18 +443,18 @@ joGLMatrixStack::joGLMatrixStack(int mode) : matrixmode(mode), size(0) {
   LoadIdentity();
 }
 
-void joGLMatrixStack::Load(const float* m) { 
+void joGLMatrixStack::Load(const float* m) {
   memcpy(Data(size), m, sizeof(Matrix));
 }
 
 void joGLMatrixStack::LoadIdentity() {
-  static const float identity [16] = 
+  static const float identity [16] =
   { 1, 0, 0, 0,
     0, 1, 0, 0,
     0, 0, 1, 0,
     0, 0, 0, 1 };
-  
-  Load(&identity[0]);  
+
+  Load(&identity[0]);
 }
 
 void joGLMatrixStack::Push() {
@@ -497,7 +494,7 @@ void joGLMatrixStack::Rotate(float angle, float x, float y, float z) {
   if (mag > 0.0f)
   {
     const float sinAngle = sinf(DEG2RAD(angle));
-    const float cosAngle = cosf(DEG2RAD(angle));    
+    const float cosAngle = cosf(DEG2RAD(angle));
 
     x /= mag;
     y /= mag;
@@ -537,17 +534,17 @@ void joGLMatrixStack::Rotate(float angle, float x, float y, float z) {
     rotMat[3][3] = 1.0F;
 
     float current[16];
-    Get(&current[0]);    
+    Get(&current[0]);
 
-    float result[16]; 
-    myGlMultMatrix(&rotMat[0][0], &current[0], &result[0]);    
+    float result[16];
+    myGlMultMatrix(&rotMat[0][0], &current[0], &result[0]);
 
     Load(&result[0]);
   }
 }
 
 void joGLMatrixStack::Translate(float x, float y, float z) {
-  const float translate[16] = { 
+  const float translate[16] = {
     1, 0, 0, 0,
     0, 1, 0, 0,
     0, 0, 1, 0,
@@ -564,7 +561,7 @@ void joGLMatrixStack::Translate(float x, float y, float z) {
 }
 
 void joGLMatrixStack::Get(float* dst) const {
-  memcpy(dst, Data(size), sizeof(Matrix));   
+  memcpy(dst, Data(size), sizeof(Matrix));
 }
 
 float* joGLMatrixStack::Data(int StackIndex) {
@@ -632,16 +629,7 @@ static void	RB_SetBuffer( const void *data ) {
 
 	backEnd.frameCount = cmd->frameCount;
 
-	if (r_useFramebuffer.GetBool()) {
-		int width = glConfig.vidWidth;
-		int height = glConfig.vidHeight;
-
-		fhFramebuffer::renderFramebuffer->Resize( width, height );
-		fhFramebuffer::renderFramebuffer->Bind();
-	}
-	else {
-		fhFramebuffer::defaultFramebuffer->Bind();
-	}
+	fhFramebuffer::defaultFramebuffer->Bind();
 
 	// clear screen for debugging
 	// automatically enable this with several other debug tools
@@ -658,7 +646,7 @@ static void	RB_SetBuffer( const void *data ) {
 			glClearColor( 0.4f, 0.0f, 0.25f, 1.0f );
 		}
 		glClear( GL_COLOR_BUFFER_BIT );
-	}	
+	}
 }
 
 /*
@@ -730,7 +718,7 @@ RB_SwapBuffers
 
 =============
 */
-const void	RB_SwapBuffers( const void *data ) {
+static void	RB_SwapBuffers( const void *data ) {
 	// texture swapping test
 	if ( r_showImages.GetInteger() != 0 ) {
 		RB_ShowImages();
@@ -742,11 +730,6 @@ const void	RB_SwapBuffers( const void *data ) {
 	}
 
     RB_LogComment( "***************** RB_SwapBuffers *****************\n\n\n" );
-	
-	if (r_useFramebuffer.GetBool()) {		
-		fhFramebuffer::defaultFramebuffer->Bind();
-		fhFramebuffer::renderFramebuffer->BlitToCurrentFramebuffer();
-	}
 
     GLimp_SwapBuffers();
 }
@@ -758,7 +741,7 @@ RB_CopyRender
 Copy part of the current framebuffer to an image
 =============
 */
-const void	RB_CopyRender( const void *data ) {
+static void	RB_CopyRender( const void *data ) {
 	const copyRenderCommand_t	*cmd;
 
 	cmd = (const copyRenderCommand_t *)data;
@@ -769,8 +752,12 @@ const void	RB_CopyRender( const void *data ) {
 
     RB_LogComment( "***************** RB_CopyRender *****************\n" );
 
-	if (cmd->image) {
-		cmd->image->CopyFramebuffer( cmd->x, cmd->y, cmd->imageWidth, cmd->imageHeight, false );
+	if (auto image = cmd->image) {
+		//TODO(johl): Can we get rid of RB_CopyRender completely?
+		//            If we know in advance we will copy render to a texture, we could render directly into that texture!
+		fhFramebuffer framebuffer( cmd->imageWidth, cmd->imageHeight, image, nullptr );
+		fhFramebuffer::BlitColor(fhFramebuffer::GetCurrentDrawBuffer(), &framebuffer, cmd->imageWidth, cmd->imageHeight);
+		framebuffer.Purge();
 	}
 }
 
@@ -782,7 +769,6 @@ This function will be called syncronously if running without
 smp extensions, or asyncronously by another thread.
 ====================
 */
-int		backEndStartTime, backEndFinishTime;
 void RB_ExecuteBackEndCommands( const emptyCommand_t *cmds ) {
 	// r_debugRenderToTexture
 	int	c_draw3d = 0, c_draw2d = 0, c_setBuffers = 0, c_swapBuffers = 0, c_copyRenders = 0;
@@ -791,7 +777,7 @@ void RB_ExecuteBackEndCommands( const emptyCommand_t *cmds ) {
 		return;
 	}
 
-	backEndStartTime = Sys_Milliseconds();
+	const auto backEndStartTime = Sys_Milliseconds();
 
 	// needed for editor rendering
 	RB_SetDefaultGLState();
@@ -835,7 +821,7 @@ void RB_ExecuteBackEndCommands( const emptyCommand_t *cmds ) {
 	backEnd.glState.tmu[0].currentTexture = 0;
 
 	// stop rendering on this thread
-	backEndFinishTime = Sys_Milliseconds();
+	const auto backEndFinishTime = Sys_Milliseconds();
 	backEnd.pc.msec = backEndFinishTime - backEndStartTime;
 
 	if ( r_debugRenderToTexture.GetInteger() == 1 ) {
